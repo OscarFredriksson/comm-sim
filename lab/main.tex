@@ -120,7 +120,7 @@
     A warmup time value of 35 (removing the first 35 rows in \verb|queue-1.tr|) will be used.
 
     \subsubsection*{How many independent simulation runs have you performed?}
-
+    4 independent simulation runs was done to make sure the results doesn't differ to much between runs.
 
     \subsubsection*{Compare your findings to the mathematical model}
     The packet loss of the "infinite" buffer size of 100 thousand packets is unsurprisingly 0\%. The theoretical packet loss of a buffer of size $K$ can be calculated using equation \ref{eqn:theoretical-packet-loss} 
@@ -178,9 +178,9 @@
     Using an online equation solver tool \cite{wolfram} $K$ was found to be $\approx24.1589$, which gets rounded up to a buffer size of 25 to get less than 1\%.
 
     \subsubsection*{Modify the simulation to have a M/D/1 queue, compare the results with the mathematical expression.}
+    To simulate a M/D/1 queue the code was modified to generate packets constant size, which in turn gives us a constant service rate with no variation. The modified code can be seen below. 
 
     \begin{lstlisting}[language=C]
-
     static void GenerateTrafficMD1(Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomTime, double mu) 
     {
         const uint32_t size = (1000000.0/(8*mu)-30);
@@ -193,6 +193,15 @@
 
     Simulator::ScheduleWithContext(source->GetNode()->GetId(), Seconds(1.0), &GenerateTrafficMD1, source, randomTime, mu);
     \end{lstlisting}
+
+    Running this modified code with all the same parameters as the previous simulation the average queue size was $\approx3.76$. The mathematical theoretical value for the average queue size was calculated to $\approx4.55$ as can be seen in equation \ref{eqn:md1-avg-queue}.
+
+    \begin{equation}
+    \label{eqn:md1-avg-queue}
+        N_q = \frac{\lambda^2*\frac{1}{\mu^2}}{2(1-\rho)} = \frac{300^2*\frac{1}{330^2}}{2\left(1-\frac{300}{330}\right)} = 4.55
+    \end{equation}
+
+    
 
     \newpage
     \printbibliography
