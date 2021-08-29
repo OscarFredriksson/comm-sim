@@ -14,7 +14,7 @@ x = [float(row) for row in data]
 
 print(x)
 
-plt.hist(x)
+plt.hist(x, density=True, bins=20)
 
 output_file = file_name.split('.')[0] + ".png"
 
