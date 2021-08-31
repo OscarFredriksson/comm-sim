@@ -76,6 +76,8 @@ static void received_msg (Ptr<Socket> socket1, Ptr<Socket> socket2, Ptr<const Pa
 	
 	Ptr<UniformRandomVariable> rand=CreateObject<UniformRandomVariable>();
 	
+  p->GetUid();
+
 	if(rand->GetValue(0.0,1.0)<=0.7)
   {
     //std::cout << "::::: Transmitting from GW to Controller   "  << std::endl;
@@ -130,6 +132,8 @@ void SchedulePackets(Ptr<Socket> source, double meanTime, double meanSize, doubl
 int main (int argc, char *argv[])
 {
   //runPRNGtest();
+
+  //RngSeedManager::SetSeed(12);
 
   const uint32_t nodeCount = 9;
 
