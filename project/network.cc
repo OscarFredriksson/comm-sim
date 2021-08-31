@@ -1,6 +1,6 @@
 #include "network.h"
 
-Network::Network(uint32_t nodes, double simTime) 
+Network::Network(uint32_t nodes, double simTime, double appStartDelay) 
 {
     nodeContainer.Create(nodes);
     stack.Install(nodeContainer);
@@ -11,14 +11,15 @@ Network::Network(uint32_t nodes, double simTime)
     help.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     help.InstallAll();
 
-    server_apps.Start(Seconds (1.0));
-    server_apps.Stop(Seconds (simTime));
+    server_apps.Start(Seconds (appStartDelay));
+    server_apps.Stop(Seconds (simTime+appStartDelay));
 }
 
 void Network::addP2PLink(const std::string& dataRate, uint32_t nodeIdA, uint32_t nodeIdB)
 {
     PointToPointHelper p2pHelper;
     p2pHelper.SetDeviceAttribute("DataRate", StringValue(dataRate));
+    p2pHelper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("1000p"));
 
     devices.Add(p2pHelper.Install(nodeContainer.Get(nodeIdA), nodeContainer.Get(nodeIdB)));
 

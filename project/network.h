@@ -46,7 +46,7 @@ private:
   std::vector<InetSocketAddress> remotes;
 
 public:
-  Network(uint32_t nodes, double simTime);
+  Network(uint32_t nodes, double simTime, double appStartDelay);
 
   void addP2PLink(const std::string& dataRate, uint32_t nodeIdA, uint32_t nodeIdB);
 

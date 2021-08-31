@@ -10,6 +10,8 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("ScratchSimulator");
 
+
+
 class LinearCongruentialGenerator {
 
 public:
@@ -31,49 +33,6 @@ double exp_dist_from_uniform(double lambda, double u)
 {
   double ret = -log(u) / lambda;
   return ret;
-}
-
-static void received_msg (Ptr<Socket> socket1, Ptr<Socket> socket2, Ptr<const Packet> p, const Address &srcAddress , const Address &dstAddress)
-{
-	//std::cout << "::::: A packet received at the Server! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
-	
-	Ptr<UniformRandomVariable> rand=CreateObject<UniformRandomVariable>();
-	
-	if(rand->GetValue(0.0,1.0)<=0.5){
-		//std::cout << "::::: Transmitting from Server to Router   "  << std::endl;
-		socket1->Send (Create<Packet> (p->GetSize ()));
-	}
-	else{
-		//std::cout << "::::: Transmitting from GW to Controller   "  << std::endl;
-		socket2->SendTo(Create<Packet> (p->GetSize ()),0,srcAddress);
-	}
-}
-
-static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
-{
-	uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
-	// std::cout << "::::: A packet is generate at Node "<< socket->GetNode ()->GetId () << " with size " << pktSize << " bytes ! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
-	
-	// We make sure that the message is at least 12 bytes. The minimum length of the UDP header. We would get error otherwise.
-	if(pktSize<12){
-		pktSize=12;
-	}
-	
-	socket->Send (Create<Packet> (pktSize));
-
-	Time pktInterval = Seconds(randomTime->GetValue ()); //Get random value for next packet generation time 
-	Simulator::Schedule (pktInterval, &GenerateTraffic, socket, randomSize, randomTime); //Schedule next packet generation
-}
-
-void SchedulePackets(Ptr<Socket> source, double meanTime, double meanSize) {
-  
-  Ptr<ExponentialRandomVariable> randomTime = CreateObject<ExponentialRandomVariable> ();
-  randomTime->SetAttribute ("Mean", DoubleValue (meanTime));
-   
-   Ptr<ExponentialRandomVariable> randomSize = CreateObject<ExponentialRandomVariable> ();
-   randomSize->SetAttribute ("Mean", DoubleValue (meanSize));
-
-   Simulator::ScheduleWithContext (source->GetNode()->GetId(), Seconds (2.0), &GenerateTraffic, source, randomSize, randomTime);
 }
 
 void runPRNGtest() 
@@ -110,13 +69,74 @@ void runPRNGtest()
   erv_file.close();
 }
 
+
+static void received_msg (Ptr<Socket> socket1, Ptr<Socket> socket2, Ptr<const Packet> p, const Address &srcAddress , const Address &dstAddress)
+{
+	//std::cout << "::::: A packet received at the Server! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
+	
+	Ptr<UniformRandomVariable> rand=CreateObject<UniformRandomVariable>();
+	
+	if(rand->GetValue(0.0,1.0)<=0.7)
+  {
+    //std::cout << "::::: Transmitting from GW to Controller   "  << std::endl;
+		socket2->SendTo(Create<Packet>(p->GetSize ()),0,srcAddress);
+	}
+	else
+  {
+		//std::cout << "::::: Transmitting from Server to Router   "  << std::endl;
+		socket1->Send (Create<Packet>(p->GetSize ()));
+	}
+}
+
+int totalPackets = 0;
+int smallPackets = 0;
+int addedBytes = 0;
+
+static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
+{
+	uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
+	// std::cout << "::::: A packet is generate at Node "<< socket->GetNode ()->GetId () << " with size " << pktSize << " bytes ! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
+	
+	// We make sure that the message is at least 12 bytes. The minimum length of the UDP header. We would get error otherwise.
+	if(pktSize<12){
+    smallPackets++;
+
+    addedBytes += (12-pktSize);
+
+		pktSize=12;
+	}
+  
+  //std::cout << "Packet size: " << pktSize << " created packet size: " << Create<Packet>(pktSize)->GetSize() << "\n";
+
+	socket->Send (Create<Packet> (pktSize));
+
+  totalPackets++;
+
+	Time pktInterval = Seconds(randomTime->GetValue ()); //Get random value for next packet generation time 
+	Simulator::Schedule (pktInterval, &GenerateTraffic, socket, randomSize, randomTime); //Schedule next packet generation
+}
+
+void SchedulePackets(Ptr<Socket> source, double meanTime, double meanSize, double startDelay) {
+  
+  Ptr<ExponentialRandomVariable> randomTime = CreateObject<ExponentialRandomVariable> ();
+  randomTime->SetAttribute ("Mean", DoubleValue (meanTime));
+   
+   Ptr<ExponentialRandomVariable> randomSize = CreateObject<ExponentialRandomVariable> ();
+   randomSize->SetAttribute ("Mean", DoubleValue (meanSize));
+
+   Simulator::ScheduleWithContext(source->GetNode()->GetId(), Seconds(startDelay), &GenerateTraffic, source, randomSize, randomTime);
+}
+
 int main (int argc, char *argv[])
 {
   //runPRNGtest();
 
-  const double simTime = 10.0; //Seconds
+  const uint32_t nodeCount = 9;
 
-  Network network(9, simTime);
+  const double simTime = 10.0; //Seconds
+  const double startDelay = 1.0; //Seconds
+
+  Network network(nodeCount, simTime, startDelay);
 
   network.addP2PLink("5Mbps", 0, 4);
   network.addP2PLink("5Mbps", 1, 5);
@@ -126,23 +146,6 @@ int main (int argc, char *argv[])
   network.addP2PLink("5Mbps", 6, 7);
   network.addP2PLink("5Mbps", 5, 6);
   network.addP2PLink("8Mbps", 6, 8);
-
-  // Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
-
-  // MobilityHelper help;
-  // help.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-  // help.InstallAll();
-
-  AnimationInterface anim("network.xml");
-  anim.SetConstantPosition(network.nodeContainer.Get(0), -80.0, -20.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(1), -80.0, 20.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(2), -40.0, 60.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(3), 0.0, 40.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(4), -40.0, -20.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(5), -40.0, 20.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(6), 0.0, 0.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(7), 0.0, -20.0);
-  anim.SetConstantPosition(network.nodeContainer.Get(8), 50.0, 0.0);
 
   network.addUdpServer(0);
   network.addUdpServer(1);
@@ -161,12 +164,25 @@ int main (int argc, char *argv[])
   Ptr<Socket> sourceC = network.createConnection(2, 11);
   Ptr<Socket> sourceD = network.createConnection(3, 11);
 
-  SchedulePackets(sourceA, 0.002, 100);
-  SchedulePackets(sourceB, 0.002, 100);
-  SchedulePackets(sourceC, 0.0005, 100);
-  SchedulePackets(sourceD, 0.001, 100);
+  AnimationInterface anim("network.xml");
+  anim.SetConstantPosition(network.nodeContainer.Get(0), -80.0, -20.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(1), -80.0, 20.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(2), -40.0, 60.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(3), 0.0, 40.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(4), -40.0, -20.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(5), -40.0, 20.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(6), 0.0, 0.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(7), 0.0, -20.0);
+  anim.SetConstantPosition(network.nodeContainer.Get(8), 50.0, 0.0);
 
-  Simulator::Stop(Seconds (simTime));
+  const int meanPacketSize = 100;
+
+  SchedulePackets(sourceA, 0.002, meanPacketSize, startDelay);
+  SchedulePackets(sourceB, 0.002, meanPacketSize, startDelay);
+  SchedulePackets(sourceC, 0.0005, meanPacketSize, startDelay);
+  SchedulePackets(sourceD, 0.001, meanPacketSize, startDelay);
+
+  Simulator::Stop(Seconds (startDelay+simTime));
 
   FlowMonitorHelper flowmonHelper;
   flowmonHelper.InstallAll ();
@@ -174,6 +190,10 @@ int main (int argc, char *argv[])
 
   Simulator::Run();
   Simulator::Destroy();
+
+  std::cout << "Total packets: " << totalPackets << "\n";
+  std::cout << "Packets / s: " << totalPackets / simTime << "\n";
+  std::cout << "Number of packets under 12 byte: " << smallPackets << ", extra added bytes: " << addedBytes << " bytes \n";
 
   //NS_LOG_INFO ("Create Applications.");
 
